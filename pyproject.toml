@@ -9,11 +9,7 @@ description = "Upload a song, get a karaoke video: vocals removed, word-by-word 
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
-  "fastapi>=0.110",          # all the Vercel-hosted UI needs; the heavy stack is the "studio" extra
-]
-
-[project.optional-dependencies]
-studio = [
+  "fastapi>=0.110",
   "uvicorn>=0.29",
   "python-multipart>=0.0.9",
   "numpy>=1.26",
@@ -25,7 +21,9 @@ studio = [
   "torchaudio>=2.2",
   "playwright>=1.44",
 ]
-dev = ["karaoke-studio[studio]", "pytest", "httpx"]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
 
 [project.scripts]
 karaoke-studio = "karaoke.__main__:main"

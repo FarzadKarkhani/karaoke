@@ -111,8 +111,6 @@
     return { bands, fps, frames, data: new Uint8Array(buf, 12, bands * frames) };
   }
 
-  const resolveUrl = (u) => (global.KARAOKE_URL ? global.KARAOKE_URL(u) : u);
-
   function loadImage(url) {
     return new Promise((resolve, reject) => {
       const img = new Image();
@@ -165,7 +163,7 @@
       for (const f of s.customFonts || []) {
         if (this._registeredFonts.has(f.family + f.url)) continue;
         this._registeredFonts.add(f.family + f.url);
-        jobs.push(new FontFace(f.family, `url(${resolveUrl(f.url)})`).load().then((ff) => document.fonts.add(ff)).catch(() => {}));
+        jobs.push(new FontFace(f.family, `url(${f.url})`).load().then((ff) => document.fonts.add(ff)).catch(() => {}));
       }
       await Promise.all(jobs);
 
@@ -177,8 +175,8 @@
 
       const bgUrl = s.background.type === 'image' ? s.background.image : null;
       const logoUrl = s.logo.url;
-      if (bgUrl !== this._bgUrl) { this._bgUrl = bgUrl; this.images.bg = bgUrl ? await loadImage(resolveUrl(bgUrl)).catch(() => null) : null; this._bgCache = null; }
-      if (logoUrl !== this._logoUrl) { this._logoUrl = logoUrl; this.images.logo = logoUrl ? await loadImage(resolveUrl(logoUrl)).catch(() => null) : null; }
+      if (bgUrl !== this._bgUrl) { this._bgUrl = bgUrl; this.images.bg = bgUrl ? await loadImage(bgUrl).catch(() => null) : null; this._bgCache = null; }
+      if (logoUrl !== this._logoUrl) { this._logoUrl = logoUrl; this.images.logo = logoUrl ? await loadImage(logoUrl).catch(() => null) : null; }
       this._dirty = true;
     }
 
