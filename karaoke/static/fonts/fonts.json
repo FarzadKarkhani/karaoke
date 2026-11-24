@@ -1,0 +1,80 @@
+[
+ {
+  "family": "Vazirmatn",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "latin",
+   "arabic"
+  ],
+  "note": "Persian / Arabic UI font, clean and modern"
+ },
+ {
+  "family": "Inter",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "latin"
+  ],
+  "note": "Neutral sans-serif (Persian falls back to Vazirmatn)"
+ },
+ {
+  "family": "Montserrat",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "latin"
+  ],
+  "note": "Geometric sans-serif (Persian falls back to Vazirmatn)"
+ },
+ {
+  "family": "Poppins",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "latin"
+  ],
+  "note": "Rounded geometric sans-serif (Persian falls back to Vazirmatn)"
+ },
+ {
+  "family": "Playfair Display",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "latin"
+  ],
+  "note": "Elegant serif (Persian falls back to Noto Naskh Arabic)"
+ },
+ {
+  "family": "Lalezar",
+  "weights": [
+   400
+  ],
+  "scripts": [
+   "latin",
+   "arabic"
+  ],
+  "note": "Bold display face for Persian titles"
+ },
+ {
+  "family": "Noto Naskh Arabic",
+  "weights": [
+   400,
+   700
+  ],
+  "scripts": [
+   "arabic"
+  ],
+  "note": "Traditional Naskh style for Persian"
+ }
+]

@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "karaoke-studio"
+version = "0.1.0"
+description = "Upload a song, get a karaoke video: vocals removed, word-by-word highlighted lyrics (Persian / English / Turkish), branded, MP4."
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "fastapi>=0.110",
+  "uvicorn>=0.29",
+  "python-multipart>=0.0.9",
+  "numpy>=1.26",
+  "soundfile>=0.12",
+  "rapidfuzz>=3.0",
+  "faster-whisper>=1.1",
+  "demucs>=4.0.1",
+  "torch>=2.2",
+  "torchaudio>=2.2",
+  "playwright>=1.44",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[project.scripts]
+karaoke-studio = "karaoke.__main__:main"
+
+[tool.setuptools]
+packages = ["karaoke"]
+
+[tool.setuptools.package-data]
+karaoke = ["static/**/*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

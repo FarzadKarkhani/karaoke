@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Karaoke Studio</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%237c5cff'/%3E%3Cstop offset='1' stop-color='%2322d3ee'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='32' height='32' rx='9' fill='url(%23g)'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="#/"><i></i>Karaoke Studio</a>
+  <div class="proj-title" id="projTitle" hidden>
+    <input id="inTitle" class="title" placeholder="Song title" dir="auto" title="Song title (shown in the video)">
+    <input id="inArtist" class="artist" placeholder="Artist" dir="auto" title="Artist (shown in the video)">
+  </div>
+  <div class="grow"></div>
+  <button class="btn small ghost" id="btnHome" hidden>← All projects</button>
+</header>
+
+<!-- ============ HOME ============ -->
+<main id="viewHome" class="wrap" hidden>
+  <div class="hero">
+    <h1>Turn any song into a<br>karaoke video.</h1>
+    <p>Upload a track. We remove the vocals, find the words, and render an MP4 with word-by-word highlighting — Persian, English or Turkish.</p>
+  </div>
+  <div class="card">
+    <div class="drop" id="drop">
+      <div class="big" id="dropText">Drop a song here, or click to choose</div>
+      <div class="muted small" style="margin-top:6px">MP3 · WAV · FLAC · M4A · OGG</div>
+      <input type="file" id="file" accept="audio/*,video/mp4,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.wma,.aiff,.mka" hidden>
+    </div>
+
+    <div class="field">
+      <label>Language of the lyrics</label>
+      <div class="chips" id="langChips"></div>
+    </div>
+
+    <div class="field">
+      <label for="lyrics">Lyrics <span class="muted" style="font-weight:400">— recommended</span></label>
+      <textarea id="lyrics" dir="auto" placeholder="Paste the lyrics, one sung line per line.&#10;We keep your text exactly as written and only take the timing from the audio.&#10;Leave empty to use what the AI hears."></textarea>
+    </div>
+
+    <div class="grid2 field">
+      <div><label for="title">Title</label><input type="text" id="title" dir="auto" placeholder="Taken from the file if empty"></div>
+      <div><label for="artist">Artist</label><input type="text" id="artist" dir="auto" placeholder="Optional"></div>
+    </div>
+
+    <details class="adv">
+      <summary>Advanced</summary>
+      <div class="grid2 field">
+        <div><label for="asr">Lyrics recognition</label><select id="asr"></select>
+          <div class="hint">“Best” is the most accurate for Persian and Turkish, but slower on a computer without a GPU.</div></div>
+        <div><label for="sep">Vocal removal</label><select id="sep"></select>
+          <div class="hint">“Best” runs four models and takes about 4× as long.</div></div>
+      </div>
+    </details>
+
+    <div style="margin-top:22px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+      <button class="btn primary big" id="btnCreate" disabled>Create karaoke →</button>
+      <button class="btn ghost" id="btnDemo">Try the demo</button>
+      <span class="muted small" id="uploadMsg"></span>
+    </div>
+  </div>
+  <div class="projects" id="projects" hidden><h2>Your projects</h2><div id="projList"></div></div>
+</main>
+
+<!-- ============ PROCESSING ============ -->
+<main id="viewProgress" class="wrap" hidden>
+  <div class="card">
+    <h2 style="margin:0 0 4px" id="pgTitle">Working on it…</h2>
+    <div class="muted" id="pgMsg">Starting</div>
+    <div class="bar" style="margin-top:18px"><i id="pgBar"></i></div>
+    <ul class="steps" id="pgSteps"></ul>
+    <div class="err" id="pgErr" hidden></div>
+    <div style="margin-top:16px; display:flex; gap:10px">
+      <button class="btn" id="pgRetry" hidden>Retry</button>
+      <button class="btn danger ghost" id="pgDelete">Delete project</button>
+    </div>
+    <p class="hint">The first run downloads the AI models (a few hundred MB), so it takes longer. Later songs are much faster.</p>
+  </div>
+</main>
+
+<!-- ============ STUDIO ============ -->
+<main id="viewStudio" class="studio" hidden>
+  <section class="stage">
+    <div class="canvas-wrap" id="canvasWrap"><canvas id="cv"></canvas></div>
+    <div class="transport">
+      <button class="play" id="btnPlay" title="Play / pause (Space)">▶</button>
+      <input type="range" id="seek" min="0" max="1000" value="0">
+      <span class="time" id="timeLbl">0:00 / 0:00</span>
+    </div>
+    <audio id="aInst" preload="auto"></audio><audio id="aVoc" preload="auto"></audio>
+  </section>
+
+  <section class="panel">
+    <div class="tabs" id="tabs">
+      <button class="tab on" data-tab="lyrics">Lyrics</button>
+      <button class="tab" data-tab="style">Style</button>
+      <button class="tab" data-tab="brand">Brand</button>
+      <button class="tab" data-tab="export">Export</button>
+    </div>
+    <div class="tabbody" id="tab-lyrics"></div>
+    <div class="tabbody" id="tab-style" hidden></div>
+    <div class="tabbody" id="tab-brand" hidden></div>
+    <div class="tabbody" id="tab-export" hidden></div>
+  </section>
+</main>
+
+<script src="/static/renderer.js"></script>
+<script src="/static/presets.js"></script>
+<script src="/static/app.js"></script>
+</body>
+</html>
