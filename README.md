@@ -20,7 +20,7 @@ You need **Python 3.10+** and **ffmpeg** (`brew install ffmpeg` · `sudo apt ins
 ```bash
 git clone https://github.com/farzadkarkhani/karaoke.git && cd karaoke
 python -m venv .venv && source .venv/bin/activate      # Windows: .venv\Scripts\activate
-pip install -e .
+pip install -e ".[studio]"
 playwright install chromium                              # the browser that draws the video frames
 ```
 
@@ -84,6 +84,47 @@ Measured on a 4-core CPU with no GPU (a 32-second test clip and a 65-second vide
 
 Export time is dominated by 1080p H.264 encoding plus frame drawing, both CPU-bound. Draft quality and 720p are noticeably faster. The AI steps use a CUDA GPU automatically when one is present.
 
+## Deploy (Vercel UI + your own backend)
+
+Karaoke Studio is two parts, and only one of them can live on Vercel:
+
+| Part | What it does | Where it can run |
+|---|---|---|
+| **UI** (`app.py` → `karaoke/webui.py`) | The studio pages, light (just FastAPI, ~25 MB) | **Vercel** |
+| **Backend** (`python -m karaoke`, or the `Dockerfile`) | Vocal removal, lyric timing, MP4 export | A normal server / VM / container host |
+
+The backend cannot run in a Vercel function: it needs PyTorch (far over Vercel's 250 MB function limit), ffmpeg, a headless Chromium, a persistent disk for models and projects, and jobs that run for minutes. The browser therefore talks to the backend **directly** (songs and videos never pass through Vercel).
+
+**1. Run the backend somewhere with a public https address** (a VPS, Fly.io, Railway, Render, RunPod…):
+
+```bash
+docker build -t karaoke-studio .
+docker run -d -p 8000:8000 -v karaoke-data:/data \
+  -e KARAOKE_TOKEN='choose-a-long-random-secret' \
+  -e KARAOKE_CORS_ORIGINS='https://your-project.vercel.app' \
+  karaoke-studio
+```
+
+Put it behind https (Caddy, Cloudflare, or your host's TLS). A page served over https cannot call an `http://` backend. The `Dockerfile` has not been built in the environment this was developed in, so expect to adjust it once on your host. Without Docker, `pip install -e ".[studio]"`, `playwright install --with-deps chromium`, then `KARAOKE_TOKEN=… KARAOKE_CORS_ORIGINS=… python -m karaoke --host 0.0.0.0 --no-browser` does the same.
+
+**2. Deploy the UI to Vercel.** Import this repository (Framework preset: FastAPI; no build settings needed) and add the environment variable:
+
+| Variable | Value |
+|---|---|
+| `KARAOKE_BACKEND_URL` | `https://your-backend.example.com` |
+
+Open the Vercel URL, enter the access token once (it is remembered in that browser), and use it as normal.
+
+Backend environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `KARAOKE_TOKEN` | Shared secret. When set, every API call and media URL must carry it. **Set this on any internet-facing backend**, otherwise anyone can run heavy jobs and upload files. |
+| `KARAOKE_CORS_ORIGINS` | Comma-separated origins allowed to call the backend (your Vercel URL). Not needed when using the backend's own pages. |
+| `KARAOKE_DATA` | Where projects, uploads, renders and presets are stored (mount a volume). |
+
+The token travels in the URL for audio, images and downloads (browsers cannot attach headers to those), so use it with https and treat it like a password for a personal tool, not as multi-user authentication.
+
 ## How it works
 
 ```
@@ -106,7 +147,7 @@ MP4 export      ┘   (same code, headless Chromium)    └→ ffmpeg → H.264 
 * Vocal removal is AI-based: some backing vocals or reverb may remain, and a little of the music may be removed with the voice.
 * Mixed-script lines (e.g. a Persian line with a whole English phrase) keep logical word order and may not follow strict bidi reordering inside the line.
 * No video backgrounds yet (colors, gradients and images only). The studio UI is in English.
-* It is a single-user local app with no login. Do not expose it to the internet (`--host 0.0.0.0` is for your own network).
+* It is a single-user app with only an optional shared token, not accounts. If you expose the backend to the internet, set `KARAOKE_TOKEN` (see Deploy).
 * Only use music you have the rights to.
 
 ## Troubleshooting

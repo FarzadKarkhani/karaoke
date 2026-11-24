@@ -18,6 +18,9 @@ def main() -> None:
     import uvicorn
     from .server import create_app
 
+    if args.host not in ("127.0.0.1", "localhost", "::1") and not os.environ.get("KARAOKE_TOKEN"):
+        print("\n  WARNING: listening on a network address with no KARAOKE_TOKEN set: anyone who can reach this port\n"
+              "  can run heavy jobs and upload files. Set KARAOKE_TOKEN=<secret> (and KARAOKE_CORS_ORIGINS for a hosted UI).\n")
     app = create_app(args.port)
     url = f"http://{'127.0.0.1' if args.host in ('0.0.0.0', '::') else args.host}:{args.port}"
     if not args.no_browser:

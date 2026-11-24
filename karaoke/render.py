@@ -82,7 +82,8 @@ async def render_video(base_url: str, cfg: dict, audio_path: Path, out_path: Pat
             pages = []
             size = None
             for _ in range(workers):
-                ctx = await browser.new_context(viewport={"width": 320, "height": 240})
+                headers = {"x-karaoke-token": os.environ["KARAOKE_TOKEN"]} if os.environ.get("KARAOKE_TOKEN") else None
+                ctx = await browser.new_context(viewport={"width": 320, "height": 240}, extra_http_headers=headers)
                 page = await ctx.new_page()
                 page.on("pageerror", lambda e: print("[render page error]", e))
                 await page.goto(f"{base_url}/static/render.html")

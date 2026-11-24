@@ -21,9 +21,10 @@
     return e;
   }
   async function api(method, url, body) {
-    const opt = { method, headers: {} };
+    const opt = { method, headers: authHeaders() };
     if (body !== undefined) { opt.headers['Content-Type'] = 'application/json'; opt.body = JSON.stringify(body); }
-    const r = await fetch(url, opt);
+    const r = await fetch(BASE + url, opt);
+    if (r.status === 401) { lsSet('karaoke.token', ''); toast('Access token required: reload the page to enter it', 6000); }
     if (!r.ok) { let m = r.statusText; try { m = (await r.json()).detail || m; } catch (_) {} throw new Error(typeof m === 'string' ? m : JSON.stringify(m)); }
     return r.json();
   }
@@ -37,6 +38,19 @@
   const lsGet = (k, d) => { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (_) { return d; } };
   const lsSet = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (_) {} };
 
+  // The processing backend is either this same server (local use) or a separate host (UI on Vercel).
+  const CFG = window.KARAOKE_CONFIG || { backend: '', uiOnly: false };
+  const BASE = (CFG.backend || '').replace(/\/$/, '');
+  const getToken = () => lsGet('karaoke.token', '');
+  /** Absolute, authenticated URL for anything the browser loads directly (audio, images, fonts, downloads). */
+  function U(url) {
+    if (!url || !/^\/(api|assets)\//.test(url)) return url;
+    const t = getToken();
+    return BASE + url + (t ? (url.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(t) : '');
+  }
+  window.KARAOKE_URL = U;                       // the renderer resolves stored /assets/... URLs through this
+  const authHeaders = () => (getToken() ? { 'x-karaoke-token': getToken() } : {});
+
   const S = {                                   // app state
     cfg: null, saved: [], job: null, style: null, lyrics: null, renderer: null, controls: [],
     exportOpts: Object.assign({ fps: 30, quality: 'standard', guide: 0 }, lsGet('karaoke.export', {})),
@@ -44,7 +58,7 @@
   };
 
   // ------------------------------------------------------------------ routing
-  const views = { home: $('#viewHome'), progress: $('#viewProgress'), studio: $('#viewStudio') };
+  const views = { home: $('#viewHome'), progress: $('#viewProgress'), studio: $('#viewStudio'), error: $('#viewError') };
   function show(name) {
     for (const [k, v] of Object.entries(views)) v.hidden = k !== name;
     $('#projTitle').hidden = name !== 'studio';
@@ -117,7 +131,8 @@
     lsSet('karaoke.asr', $('#asr').value); lsSet('karaoke.sep', $('#sep').value);
     const btn = $('#btnCreate'); btn.disabled = true;
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/jobs');
+    xhr.open('POST', BASE + '/api/jobs');
+    Object.entries(authHeaders()).forEach(([k, v]) => xhr.setRequestHeader(k, v));
     xhr.upload.onprogress = (e) => { if (e.lengthComputable) $('#uploadMsg').textContent = `Uploading… ${Math.round(e.loaded / e.total * 100)}%`; };
     xhr.onload = () => {
       btn.disabled = false; $('#uploadMsg').textContent = '';
@@ -191,11 +206,11 @@
     S.renderer.setStyle(S.style);
     S.renderer.setLyrics(S.lyrics);
     layoutCanvas();
-    fetch(`/api/jobs/${job.id}/spectrum`).then((r) => r.arrayBuffer()).then((b) => { S.renderer.setSpectrum(KS.parseSpectrum(b)); S.needDraw = true; }).catch(() => {});
+    fetch(U(`/api/jobs/${job.id}/spectrum`)).then((r) => r.arrayBuffer()).then((b) => { S.renderer.setSpectrum(KS.parseSpectrum(b)); S.needDraw = true; }).catch(() => {});
     await S.renderer.loadAssets();
 
     const a = $('#aInst'), v = $('#aVoc');
-    a.src = `/api/jobs/${job.id}/audio/instrumental`; v.src = `/api/jobs/${job.id}/audio/vocals`;
+    a.src = U(`/api/jobs/${job.id}/audio/instrumental`); v.src = U(`/api/jobs/${job.id}/audio/vocals`);
     updateGuide();
 
     buildTabs();
@@ -328,13 +343,13 @@
   }
   async function uploadAsset(kind, file) {
     const fd = new FormData(); fd.append('kind', kind); fd.append('file', file);
-    const r = await fetch('/api/assets', { method: 'POST', body: fd });
+    const r = await fetch(BASE + '/api/assets', { method: 'POST', body: fd, headers: authHeaders() });
     if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || 'Upload failed');
     return r.json();
   }
   function imageUpload(parent, label, urlPath, kind = 'image') {
     const img = h('img', { alt: '' }), file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml,image/gif', hidden: true });
-    const sync = () => { const u = getPath(S.style, urlPath); img.hidden = !u; if (u) img.src = u; clear.hidden = !u; };
+    const sync = () => { const u = getPath(S.style, urlPath); img.hidden = !u; if (u) img.src = U(u); clear.hidden = !u; };
     const clear = h('button', { class: 'btn small ghost', text: 'Remove', onclick: () => { setPath(S.style, urlPath, null); sync(); styleChanged(urlPath); } });
     file.onchange = async () => {
       if (!file.files[0]) return;
@@ -655,7 +670,7 @@
   }
   function downloadCard(r) {
     return h('div', { class: 'dl' }, h('div', { style: 'flex:1' }, h('b', { text: 'Your video is ready' }), h('div', { class: 'muted small', text: `${(r.size / 1e6).toFixed(1)} MB · ${r.options.fps} fps` })),
-      h('a', { class: 'btn primary', href: `/api/jobs/${S.job.id}/renders/${r.id}/download`, text: '⬇ Download MP4', download: '' }));
+      h('a', { class: 'btn primary', href: U(`/api/jobs/${S.job.id}/renders/${r.id}/download`), text: '⬇ Download MP4', download: '' }));
   }
   async function pollRender() {
     clearTimeout(S.renderPoll);
@@ -671,9 +686,41 @@
     const box = $('#renderList'); if (!box) return;
     const done = list.filter((r) => r.state === 'done' && (!S.render || r.id !== S.render.id));
     box.replaceChildren(...(done.length ? [h('div', { class: 'lbl muted', text: 'Earlier exports' })] : []), ...done.slice(0, 5).map((r) =>
-      h('div', { class: 'row check' }, h('span', { text: new Date(r.created * 1000).toLocaleString() + ` · ${(r.size / 1e6).toFixed(1)} MB` }), h('a', { href: `/api/jobs/${S.job.id}/renders/${r.id}/download`, text: 'Download', download: '' }))));
+      h('div', { class: 'row check' }, h('span', { text: new Date(r.created * 1000).toLocaleString() + ` · ${(r.size / 1e6).toFixed(1)} MB` }), h('a', { href: U(`/api/jobs/${S.job.id}/renders/${r.id}/download`), text: 'Download', download: '' }))));
   }
 
   // ------------------------------------------------------------------ boot
-  route();
+  function showError(title, ...body) {
+    show('error');
+    $('#viewError').replaceChildren(h('div', { class: 'card' }, h('h2', { style: 'margin-top:0', text: title }), ...body));
+  }
+  async function ensureToken() {
+    for (;;) {
+      const r = await fetch(BASE + '/api/config', { headers: authHeaders() }).catch(() => null);
+      if (r && r.ok) return true;
+      const t = prompt('This processing server needs an access token (KARAOKE_TOKEN). Enter it:');
+      if (!t) return false;
+      lsSet('karaoke.token', t.trim());
+    }
+  }
+  async function boot() {
+    if (CFG.uiOnly && !BASE) {
+      return showError('Processing server not configured',
+        h('p', { text: 'This page is only the studio front-end. Set the KARAOKE_BACKEND_URL environment variable to the address of your Karaoke Studio server (for example https://karaoke-api.example.com), then redeploy.' }),
+        h('p', { class: 'muted small', text: 'See “Deploy” in the README.' }));
+    }
+    let health;
+    try { health = await (await fetch(BASE + '/api/health')).json(); }
+    catch (_) {
+      return showError('Cannot reach the processing server',
+        h('p', { text: BASE ? `Nothing answered at ${BASE}.` : 'The server did not answer.' }),
+        h('p', { class: 'muted small', text: 'Check that it is running, that it is served over https when this page is https, and that KARAOKE_CORS_ORIGINS on the server includes ' + location.origin + '.' }),
+        h('button', { class: 'btn', text: 'Try again', onclick: () => location.reload() }));
+    }
+    if (health.auth_required && !(await ensureToken())) {
+      return showError('Access token required', h('button', { class: 'btn', text: 'Enter token', onclick: () => location.reload() }));
+    }
+    route();
+  }
+  boot();
 })();

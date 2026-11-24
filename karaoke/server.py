@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
+import os
 import re
 import shutil
 import uuid
@@ -10,6 +12,7 @@ from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -60,6 +63,20 @@ def create_app(port: int = 8000) -> FastAPI:
     app.state.store = store
     app.state.renders = renders
 
+    token = os.environ.get("KARAOKE_TOKEN", "")
+    origins = [o.strip().rstrip("/") for o in os.environ.get("KARAOKE_CORS_ORIGINS", "").split(",") if o.strip()]
+
+    @app.middleware("http")
+    async def access_token(request: Request, call_next):
+        """Optional shared secret for a backend that is reachable from the internet."""
+        if token and request.method != "OPTIONS":
+            p = request.url.path
+            if (p.startswith("/api/") and p != "/api/health") or p.startswith("/assets/"):
+                sent = request.headers.get("x-karaoke-token") or request.query_params.get("token", "")
+                if not hmac.compare_digest(sent.encode(), token.encode()):
+                    return JSONResponse({"detail": "Access token required"}, status_code=401)
+        return await call_next(request)
+
     @app.middleware("http")
     async def headers(request: Request, call_next):
         resp = await call_next(request)
@@ -83,6 +100,14 @@ def create_app(port: int = 8000) -> FastAPI:
         return j
 
     # ------------------------------------------------------------ config
+    @app.get("/api/health")
+    def health():
+        return {"ok": True, "auth_required": bool(token), "version": __version__}
+
+    @app.get("/config.js")
+    def config_js():
+        return Response('window.KARAOKE_CONFIG = {"backend": "", "uiOnly": false};', media_type="application/javascript")
+
     @app.get("/api/config")
     def get_config():
         fonts = json.loads((config.STATIC_DIR / "fonts" / "fonts.json").read_text())
@@ -320,4 +345,7 @@ def create_app(port: int = 8000) -> FastAPI:
         return FileResponse(config.STATIC_DIR / "index.html")
 
     app.mount("/static", StaticFiles(directory=config.STATIC_DIR), name="static")
+    if origins:        # added last so it wraps everything, including 401s and preflight requests
+        app.add_middleware(CORSMiddleware, allow_origins=origins, allow_methods=["*"], allow_headers=["*"],
+                           expose_headers=["Content-Disposition"])
     return app
