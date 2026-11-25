@@ -133,9 +133,11 @@
   }
   function updateCreateUi() {
     const n = H.files.length;
-    $('#dropText').replaceChildren(
-      n ? h('span', { class: 'file', text: n === 1 ? '🎵 ' + H.files[0].name : `🎵 ${n} songs selected` }) : 'Drop a song here, or click to choose',
-      n ? h('div', { class: 'muted small', text: n > 1 ? H.files.slice(0, 4).map((f) => f.name).join(' · ') + (n > 4 ? ` · +${n - 4} more` : '') : 'Click to choose a different file' }) : null);
+    const kids = n
+      ? [h('span', { class: 'file', text: n === 1 ? '🎵 ' + H.files[0].name : `🎵 ${n} songs selected` }),
+        h('div', { class: 'muted small', text: n > 1 ? H.files.slice(0, 4).map((f) => f.name).join(' · ') + (n > 4 ? ` · +${n - 4} more` : '') : 'Click to choose a different file' })]
+      : ['Drop a song here, or click to choose'];
+    $('#dropText').replaceChildren(...kids);
     $('#fieldLyrics').hidden = $('#fieldMeta').hidden = n > 1;
     $('#multiNote').hidden = n <= 1;
     $('#btnCreate').disabled = !n;
@@ -412,7 +414,10 @@
 
   // ------------------------------------------------------------------ controls (declarative helpers)
   function reg(c) { S.controls.push(c); return c; }
-  function row(label, ...kids) { return h('div', { class: 'row' }, h('span', { text: label }), h('div', { class: 'val' }, ...kids)); }
+  /** Every control sits in the same 3-column grid: label | control | value (value column optional). */
+  function row(label, control, out) {
+    return h('div', { class: 'row' + (out ? '' : ' wide') }, h('span', { class: 'lb', text: label }), control, out || null);
+  }
 
   function range(parent, label, path, min, max, step, f = (v) => v) {
     const out = h('output'), inp = h('input', { type: 'range', min, max, step });
@@ -421,10 +426,10 @@
     parent.append(row(label, inp, out));
   }
   function color(parent, label, path) {
-    const inp = h('input', { type: 'color' });
-    inp.oninput = () => { setPath(S.style, path, inp.value); styleChanged(path); };
-    reg({ sync() { inp.value = getPath(S.style, path) || '#000000'; } });
-    parent.append(row(label, inp));
+    const inp = h('input', { type: 'color' }), out = h('output');
+    inp.oninput = () => { setPath(S.style, path, inp.value); out.textContent = inp.value.toUpperCase(); styleChanged(path); };
+    reg({ sync() { inp.value = getPath(S.style, path) || '#000000'; out.textContent = inp.value.toUpperCase(); } });
+    parent.append(row(label, inp, out));
   }
   function toggle(parent, label, path) {
     const inp = h('input', { type: 'checkbox' });
@@ -467,14 +472,14 @@
   function imageUpload(parent, label, urlPath, kind = 'image') {
     const img = h('img', { alt: '' }), file = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/svg+xml,image/gif', hidden: true });
     const sync = () => { const u = getPath(S.style, urlPath); img.hidden = !u; if (u) img.src = u; clear.hidden = !u; };
-    const clear = h('button', { class: 'btn small ghost', text: 'Remove', onclick: () => { setPath(S.style, urlPath, null); sync(); styleChanged(urlPath); } });
+    const clear = h('button', { class: 'btn ghost', text: 'Remove', onclick: () => { setPath(S.style, urlPath, null); sync(); styleChanged(urlPath); } });
     file.onchange = async () => {
       if (!file.files[0]) return;
       try { const a = await uploadAsset('image', file.files[0]); setPath(S.style, urlPath, a.url); sync(); styleChanged(urlPath); } catch (e) { toast(e.message, 4000); }
       file.value = '';
     };
     reg({ sync });
-    parent.append(row(label, h('div', { class: 'upl' }, img, h('button', { class: 'btn small', text: 'Upload…', onclick: () => file.click() }), clear, file)));
+    parent.append(row(label, h('div', { class: 'upl' }, img, h('button', { class: 'btn', text: 'Upload…', onclick: () => file.click() }), clear, file)));
   }
 
   // ------------------------------------------------------------------ tabs
@@ -510,8 +515,10 @@
     const offText = () => { const v = S.lyrics.offset || 0; offInp.value = v; offOut.textContent = (v > 0 ? '+' : '') + v.toFixed(2) + 's'; };
     offInp.oninput = () => { S.lyrics.offset = parseFloat(offInp.value); offText(); lyricsChanged(); renderLinesTimes(); };
     reg({ sync: offText });
-    root.append(row('Sync offset', offInp, offOut));
-    root.append(h('div', { class: 'hint', text: 'Moves every word earlier or later. Click a time to jump there; ⏱ sets that line’s start to the playhead.' }));
+    const timing = section(root, 'Timing', true);
+    timing.append(row('Sync offset', offInp, offOut),
+      h('div', { class: 'hint', text: 'Moves every word earlier or later. Click a time to jump there; ⏱ sets that line’s start to the playhead.' }));
+    root.append(h('div', { class: 'lbl muted', style: 'margin:var(--s4) 0 var(--s2)', text: `Lines (${S.lyrics.lines.length})` }));
 
     const list = h('div', { class: 'lines', id: 'lineList' }); root.append(list);
     renderLines();
@@ -636,7 +643,7 @@
     const lookS = section(root, 'Look', true);
     lookS.append(h('div', { class: 'presets', id: 'presetBox' }));
     const nm = h('input', { type: 'text', placeholder: 'Name this look…', dir: 'auto' });
-    lookS.append(h('div', { style: 'display:flex;gap:8px;margin-top:12px' }, nm, h('button', { class: 'btn', text: 'Save as preset', onclick: async () => {
+    lookS.append(h('div', { class: 'save-row' }, nm, h('button', { class: 'btn', text: 'Save as preset', onclick: async () => {
       const name = nm.value.trim(); if (!name) { toast('Give the preset a name first'); return; }
       const id = (name.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 24) || 'preset') + '-' + Math.random().toString(36).slice(2, 6);
       const style = clone(S.style); delete style.canvas;
@@ -697,7 +704,7 @@
     const lg = section(root, 'Logo', true);
     imageUpload(lg, 'Logo', 'logo.url');
     select(lg, 'Position', 'logo.position', POS6);
-    range(lg, 'Size', 'logo.size', 0.03, 0.4, 0.005, (v) => Math.round(v * 100) + '% of width');
+    range(lg, 'Size', 'logo.size', 0.03, 0.4, 0.005, (v) => Math.round(v * 100) + '%');
     range(lg, 'Opacity', 'logo.opacity', 0.1, 1, 0.05, (v) => Math.round(v * 100) + '%');
     range(lg, 'Margin', 'logo.margin', 0, 0.12, 0.005, (v) => Math.round(v * 100) + '%');
 
@@ -738,13 +745,15 @@
   function buildExportTab() {
     const root = $('#tab-export'); root.innerHTML = '';
     const asp = h('div', { class: 'aspects' });
-    const AS = [['16:9', 'Landscape 16:9', 34, 19], ['9:16', 'Vertical 9:16', 19, 34], ['1:1', 'Square 1:1', 26, 26], ['4:5', 'Portrait 4:5', 24, 30]];
-    const abtns = AS.map(([v, t, w, hh]) => h('div', { class: 'aspect', onclick: () => { S.style.canvas.aspect = v; sync(); styleChanged('canvas.aspect'); } }, h('i', { style: `width:${w}px;height:${hh}px` }), t.split(' ')[0] + ' ' + v));
+    const AS = [['16:9', 'Landscape', 34, 19], ['9:16', 'Vertical', 19, 34], ['1:1', 'Square', 26, 26], ['4:5', 'Portrait', 24, 30]];
+    const abtns = AS.map(([v, name, w, hh]) => h('div', { class: 'aspect', role: 'button', tabindex: 0, onclick: () => { S.style.canvas.aspect = v; sync(); styleChanged('canvas.aspect'); } },
+      h('div', { class: 'ic' }, h('i', { style: `width:${w}px;height:${hh}px` })), h('span', { class: 'ar', text: v }), h('span', { text: name })));
     abtns.forEach((b) => asp.append(b));
     const sync = () => abtns.forEach((b, i) => b.classList.toggle('on', S.style.canvas.aspect === AS[i][0]));
     reg({ sync });
-    root.append(h('div', { class: 'lbl', text: 'Format' }), asp, h('div', { style: 'height:10px' }));
-    const body = h('div'); root.append(body);
+    const video = section(root, 'Video', true);
+    video.append(h('div', { class: 'lbl muted', text: 'Format' }), asp, h('div', { style: 'height:var(--s3)' }));
+    const body = video;
     select(body, 'Resolution', 'canvas.quality', [[720, '720p (HD)'], [1080, '1080p (Full HD)'], [1440, '1440p (2K)']], true);
 
     const optRow = (label, key, options, numeric) => {
@@ -759,10 +768,11 @@
     const g = h('input', { type: 'range', min: 0, max: 0.5, step: 0.05 }), go = h('output');
     g.oninput = () => { S.exportOpts.guide = parseFloat(g.value); go.textContent = Math.round(S.exportOpts.guide * 100) + '%'; lsSet('karaoke.export', S.exportOpts); updateGuide(); };
     reg({ sync() { g.value = S.exportOpts.guide; go.textContent = Math.round(S.exportOpts.guide * 100) + '%'; } });
-    body.append(row('Guide vocal', g, go));
-    body.append(h('div', { class: 'hint', text: 'Mixes a quiet copy of the original singer into the video, handy for learning the song. 0% = pure karaoke. Plays in the preview too.' }));
+    const audioSec = section(root, 'Audio', true);
+    audioSec.append(row('Guide vocal', g, go));
+    audioSec.append(h('div', { class: 'hint', style: 'margin-bottom:0', text: 'Mixes a quiet copy of the original singer into the video, handy for learning the song. 0% = pure karaoke. Plays in the preview too.' }));
 
-    const go2 = h('button', { class: 'btn primary big', style: 'width:100%;justify-content:center;margin-top:8px', id: 'btnRender', text: '🎬  Render MP4', onclick: startRender });
+    const go2 = h('button', { class: 'btn primary big', style: 'width:100%;margin-top:var(--s1)', id: 'btnRender', text: '🎬  Render MP4', onclick: startRender });
     root.append(go2, h('div', { id: 'renderBox' }), h('div', { id: 'renderList', style: 'margin-top:16px' }));
   }
 

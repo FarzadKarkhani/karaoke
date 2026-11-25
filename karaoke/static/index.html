@@ -46,7 +46,7 @@
       <div class="chips" id="langChips"></div>
     </div>
 
-    <div class="muted small" id="multiNote" hidden style="margin-top:14px">Several songs selected: lyrics, title and artist are per song, so the AI will listen for them now and you can fix or paste lyrics inside each project. <b>Choose the language above</b> if all songs share one, because auto-detect can guess wrong. Songs are processed one after another.</div>
+    <div class="muted small" id="multiNote" hidden style="margin-top:var(--s4)">Several songs selected: lyrics, title and artist are per song, so the AI will listen for them now and you can fix or paste lyrics inside each project. <b>Choose the language above</b> if all songs share one, because auto-detect can guess wrong. Songs are processed one after another.</div>
 
     <div class="field" id="fieldLyrics">
       <label for="lyrics">Lyrics <span class="muted" style="font-weight:400">— recommended</span></label>
@@ -68,9 +68,9 @@
       </div>
     </details>
 
-    <div style="margin-top:22px; display:flex; gap:12px; align-items:center; flex-wrap:wrap">
+    <div class="actions">
       <button class="btn primary big" id="btnCreate" disabled>Create karaoke →</button>
-      <button class="btn ghost" id="btnDemo">Try the demo</button>
+      <button class="btn big ghost" id="btnDemo">Try the demo</button>
       <span class="muted small" id="uploadMsg"></span>
     </div>
   </div>
@@ -105,11 +105,12 @@
       <button class="iconbtn" id="btnKeys" title="Keyboard shortcuts (?)">⌨</button>
     </div>
     <div class="keys" id="keysPanel" hidden>
-      <div><kbd>Space</kbd> / <kbd>K</kbd> play · pause</div>
-      <div><kbd>←</kbd> <kbd>→</kbd> seek 5 s (<kbd>Shift</kbd> 15 s) · <kbd>J</kbd> <kbd>L</kbd> 10 s</div>
-      <div><kbd>[</kbd> <kbd>]</kbd> previous · next lyric line · <kbd>Home</kbd> restart</div>
-      <div><kbd>↑</kbd> <kbd>↓</kbd> guide vocal louder · quieter · <kbd>G</kbd> guide on · off</div>
-      <div><kbd>F</kbd> or double-click the preview: fullscreen · <kbd>Esc</kbd> exit</div>
+      <div class="k"><kbd>Space</kbd><kbd>K</kbd></div><div>Play · pause (click the preview works too)</div>
+      <div class="k"><kbd>←</kbd><kbd>→</kbd></div><div>Seek 5 s back · forward (hold <kbd>Shift</kbd> for 15 s)</div>
+      <div class="k"><kbd>J</kbd><kbd>L</kbd></div><div>Seek 10 s back · forward</div>
+      <div class="k"><kbd>[</kbd><kbd>]</kbd><kbd>Home</kbd></div><div>Previous · next lyric line · restart</div>
+      <div class="k"><kbd>↑</kbd><kbd>↓</kbd><kbd>G</kbd></div><div>Guide vocal louder · quieter · on/off</div>
+      <div class="k"><kbd>F</kbd></div><div>Fullscreen (or double-click the preview) · <kbd>Esc</kbd> exits</div>
     </div>
     <audio id="aInst" preload="auto"></audio><audio id="aVoc" preload="auto"></audio>
   </section>
