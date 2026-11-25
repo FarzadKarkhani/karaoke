@@ -79,6 +79,14 @@ class JobStore:
             os.replace(tmp, self.path(job_id, "job.json"))
             return job
 
+    def disk_usage(self) -> dict:
+        """Bytes used by every project (and by their exports), plus free space on the data disk."""
+        per = {}
+        for d in config.JOBS_DIR.iterdir():
+            if valid_id(d.name) and d.is_dir():
+                per[d.name] = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
+        return {"projects": per, "bytes": sum(per.values()), "free": shutil.disk_usage(config.DATA_DIR).free}
+
     def delete(self, job_id: str) -> None:
         shutil.rmtree(self.dir(job_id), ignore_errors=True)
 
@@ -133,12 +141,13 @@ class JobStore:
             wav = d / "audio.wav"
             vocals, inst = d / "vocals.wav", d / "instrumental.wav"
 
-            if not wav.exists():
+            need_separation = not (vocals.exists() and inst.exists())
+            if need_separation and not wav.exists():        # the decoded copy is only needed for separation
                 self._progress(job_id, "decode", 0.1)
                 audio.decode_to_wav(d / job["source"], wav)
             self._progress(job_id, "decode", 1)
 
-            if not (vocals.exists() and inst.exists()):
+            if need_separation:
                 from . import separate
                 model = config.SEPARATION_MODELS.get(job["separation"], "htdemucs")
                 self._progress(job_id, "separate", 0, "Removing the vocals (first run downloads the model)")
@@ -172,6 +181,7 @@ class JobStore:
             if not project["lyrics"]["lines"]:              # never overwrite the user's edits on a retry
                 project["lyrics"] = self.align_text(job_id, job["lyrics_text"])
                 self.save_project(job_id, project)
+            wav.unlink(missing_ok=True)                    # ~10 MB per minute of audio that nothing needs any more
             self.update(job_id, stage="ready", progress=100, message="Ready", error=None)
         except Exception as e:  # noqa: BLE001 - surfaced to the UI
             traceback.print_exc()

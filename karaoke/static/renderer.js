@@ -35,7 +35,7 @@
       color: '#ffd447', color2: '#ec4899', opacity: 0.85,
       height: 0.16, position: 'bottom', bars: 48, thickness: 0.62, sensitivity: 1,
     },
-    title: { show: true, position: 'top-left', color: '#ffffff', size: 36, intro: true, introSeconds: 4.5 },
+    title: { show: true, position: 'top-left', color: '#ffffff', size: 36, cover: true, intro: true, introSeconds: 4.5 },
     logo: { url: null, position: 'top-right', size: 0.1, opacity: 1, margin: 0.04 },
     footer: { text: '', position: 'bottom-center', color: '#ffffff', size: 30, opacity: 0.8 },
     progress: { show: true, color: '#ffd447', height: 6 },
@@ -589,13 +589,65 @@
     }
 
     // ---------------------------------------------------------------- overlays
+    /** Opacity of the title card. Fully visible on the very first frame (the preview before you press play,
+     *  and the first frame of the video), then it fades out, or holds for the intro if there is room before the first line. */
     _introAlpha(t) {
       const T = this.style.title;
-      if (!T.show || !T.intro || !(this.meta.title || this.meta.artist)) return 0;
-      const first = this.lines.length ? this.starts[0] : 1e9;
-      const end = Math.min(T.introSeconds, first - 3.4);
-      if (end < 1.6) return 0;
-      return clamp(Math.min((t - 0.15) / 0.6, (end - t) / 0.7));
+      if (!(this.meta.title || this.meta.artist)) return 0;
+      let a = T.cover ? clamp(1 - t / 0.6) : 0;
+      if (T.show && T.intro) {
+        const first = this.lines.length ? this.starts[0] : 1e9;
+        const end = Math.min(T.introSeconds, first - 3.4);
+        if (end >= 1.6) a = Math.max(a, clamp((end - t) / 0.7));
+      }
+      return a;
+    }
+
+    /** Big centred title + artist. Long titles wrap onto two lines, then shrink until they fit. */
+    _drawCover(alpha) {
+      const ctx = this.ctx, s = this.style, W = this.W, H = this.H, u = this.u;
+      const title = String(this.meta.title || '').trim(), artist = String(this.meta.artist || '').trim();
+      if (!title && !artist) return;
+      const stack = fontStack(s.lyrics.font), maxW = W * 0.84;
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+
+      let size = Math.max(s.lyrics.size * u * 1.55, 20), rows = [];
+      if (title) {
+        ctx.direction = firstStrongDir(title);
+        for (let tries = 0; tries < 10; tries++) {
+          ctx.font = `700 ${size}px ${stack}`;
+          const sp = ctx.measureText(' ').width;
+          const items = title.split(/\s+/).map((t) => ({ text: t, w: ctx.measureText(t).width }));
+          rows = wrapBalanced(items, sp, maxW);
+          if (rows.length <= 2 && Math.max(...items.map((i) => i.w)) <= maxW) break;
+          size *= 0.88;
+        }
+      }
+      const step = size * 1.16, aSize = size * 0.4;
+      const titleH = rows.length * step, gap = artist ? size * 0.34 : 0;
+      const total = titleH + gap + (artist ? aSize * 1.3 : 0);
+      let y = H * 0.47 - total / 2;
+
+      ctx.shadowColor = 'rgba(0,0,0,.55)'; ctx.shadowBlur = size * 0.22; ctx.shadowOffsetY = size * 0.04;
+      ctx.fillStyle = s.title.color; ctx.font = `700 ${size}px ${stack}`; ctx.direction = firstStrongDir(title);
+      rows.forEach((row, r) => ctx.fillText(row.map((i) => i.text).join(' '), W / 2, y + (r + 0.5) * step, maxW));
+      y += titleH;
+      ctx.shadowColor = 'transparent'; ctx.shadowBlur = 0; ctx.shadowOffsetY = 0;
+
+      if (artist) {
+        ctx.fillStyle = s.lyrics.highlight;                       // accent bar between title and artist
+        const bw = size * 1.1, bh = Math.max(3, size * 0.05);
+        if (ctx.roundRect) { ctx.beginPath(); ctx.roundRect(W / 2 - bw / 2, y + gap * 0.35 - bh / 2, bw, bh, bh / 2); ctx.fill(); }
+        else ctx.fillRect(W / 2 - bw / 2, y + gap * 0.35 - bh / 2, bw, bh);
+        ctx.direction = firstStrongDir(artist);
+        ctx.font = `400 ${aSize}px ${stack}`;
+        ctx.fillStyle = rgba(s.title.color, 0.9);
+        ctx.fillText(artist, W / 2, y + gap + aSize * 0.65, maxW);
+      }
+      ctx.restore();
     }
 
     _anchor(pos, w, h, margin) {
@@ -609,24 +661,8 @@
       const ctx = this.ctx, s = this.style, u = this.u, W = this.W, H = this.H;
       const margin = 0.045 * Math.min(W, H) + 10 * u;
 
-      // intro card
-      if (introAlpha > 0.001) {
-        ctx.save();
-        ctx.globalAlpha = introAlpha;
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        const ts = s.lyrics.size * u * 1.15;
-        ctx.shadowColor = 'rgba(0,0,0,.5)'; ctx.shadowBlur = ts * 0.25;
-        ctx.direction = firstStrongDir(this.meta.title);
-        ctx.font = `700 ${ts}px ${fontStack(s.lyrics.font)}`;
-        ctx.fillStyle = s.title.color;
-        this._fitText(this.meta.title, W / 2, H * 0.44, W * 0.86);
-        ctx.shadowBlur = 0;
-        ctx.direction = firstStrongDir(this.meta.artist);
-        ctx.font = `400 ${ts * 0.5}px ${fontStack(s.lyrics.font)}`;
-        ctx.fillStyle = s.lyrics.highlight;
-        this._fitText(this.meta.artist, W / 2, H * 0.44 + ts * 0.95, W * 0.8);
-        ctx.restore();
-      }
+      // title card (cover before play / intro)
+      if (introAlpha > 0.001) this._drawCover(introAlpha);
 
       // small title in the corner (hidden while the intro card is up)
       if (s.title.show && (this.meta.title || this.meta.artist) && introAlpha < 0.01 && s.title.size > 0) {
@@ -687,7 +723,6 @@
       }
     }
 
-    _fitText(text, x, y, maxW) { this.ctx.fillText(text, x, y, maxW); }
   }
 
   /** Greedy wrap, then rebalance so rows are similar in width (no orphan last word). */

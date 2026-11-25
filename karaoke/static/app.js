@@ -55,7 +55,7 @@
 
   function leaveStudio() {
     cancelAnimationFrame(S.raf); S.raf = 0;
-    clearTimeout(S.poll); clearTimeout(S.renderPoll);
+    clearTimeout(S.poll); clearTimeout(S.renderPoll); clearTimeout(H.timer);
     for (const id of ['aInst', 'aVoc']) { const a = $('#' + id); a.pause(); a.removeAttribute('src'); a.load(); }
     S.job = null;
   }
@@ -67,8 +67,12 @@
   }
 
   // ------------------------------------------------------------------ home
-  const H = { file: null, lang: 'auto' };
+  const H = { files: [], lang: 'auto', list: [], usage: null, showNew: false, timer: 0 };
+  const LANG_NAME = { fa: 'Persian', en: 'English', tr: 'Turkish' };
+  const fmtBytes = (b) => (b >= 1e9 ? (b / 1e9).toFixed(1) + ' GB' : Math.max(1, Math.round(b / 1e6)) + ' MB');
+
   async function showHome() {
+    clearTimeout(H.timer);
     show('home');
     if (!S.cfg) S.cfg = await api('GET', '/api/config');
     const chips = $('#langChips'); chips.innerHTML = '';
@@ -81,52 +85,105 @@
       for (const [k, v] of Object.entries(S.cfg.separation)) sep.append(h('option', { value: k, text: v }));
       asr.value = lsGet('karaoke.asr', 'best'); sep.value = lsGet('karaoke.sep', 'fast');
     }
-    $('#btnCreate').disabled = !H.file;
-    loadProjects();
+    updateCreateUi();
+    await loadProjects();
   }
+
+  /** Loads every saved project (no limit besides disk space) and keeps refreshing while any is still processing. */
   async function loadProjects() {
-    const list = await api('GET', '/api/jobs').catch(() => []);
-    $('#projects').hidden = !list.length;
+    clearTimeout(H.timer);
+    const [list, usage] = await Promise.all([api('GET', '/api/jobs').catch(() => []), api('GET', '/api/storage').catch(() => null)]);
+    H.list = list; H.usage = usage;
+    renderProjects();
+    if (!views.home.hidden && list.some((j) => j.stage !== 'ready' && j.stage !== 'failed')) H.timer = setTimeout(loadProjects, 2500);
+  }
+  function renderProjects() {
+    const all = H.list, has = all.length > 0;
+    $('#hero').hidden = has; $('#projects').hidden = !has;
+    $('#newCard').hidden = has && !H.showNew;
+    $('#btnNew').textContent = H.showNew ? '✕ Close' : '＋ New karaoke';
+    if (!has) return;
+    const q = $('#projSearch').value.trim().toLowerCase();
+    const list = q ? all.filter((j) => `${j.title} ${j.artist} ${j.filename}`.toLowerCase().includes(q)) : all;
+    $('#projCount').textContent = q ? `Your projects (${list.length} of ${all.length})` : `Your projects (${all.length})`;
     const box = $('#projList'); box.innerHTML = '';
     for (const j of list) {
-      box.append(h('div', { class: 'proj', onclick: () => { location.hash = '#/p/' + j.id; } },
-        h('div', { class: 't', dir: 'auto', text: j.title || j.filename }),
-        h('div', { class: 'muted small', dir: 'auto', text: j.artist || '' }),
-        h('span', { class: 'pill ' + (j.stage === 'ready' ? 'ready' : j.stage === 'failed' ? 'failed' : ''), text: j.stage === 'ready' ? 'Ready' : j.stage === 'failed' ? 'Failed' : 'Processing…' }),
-        h('button', { class: 'btn small ghost danger', title: 'Delete', text: '✕', onclick: async (e) => { e.stopPropagation(); if (confirm('Delete this project and its files?')) { await api('DELETE', '/api/jobs/' + j.id); loadProjects(); } } })));
+      const processing = j.stage !== 'ready' && j.stage !== 'failed';
+      const lang = LANG_NAME[j.language !== 'auto' ? j.language : j.detected_language];
+      const size = H.usage && H.usage.projects[j.id];
+      box.append(h('div', { class: 'pcard ' + (j.stage === 'failed' ? 'failed' : ''), onclick: () => { location.hash = '#/p/' + j.id; } },
+        h('div', { class: 'pt', dir: 'auto', text: j.title || j.filename }),
+        h('div', { class: 'pa muted', dir: 'auto', text: j.artist || '' }),
+        processing ? h('div', { class: 'bar' }, h('i', { style: `width:${j.progress}%` })) : null,
+        h('div', { class: 'pm' },
+          h('span', { class: 'pill ' + (j.stage === 'ready' ? 'ready' : j.stage === 'failed' ? 'failed' : ''), text: j.stage === 'ready' ? 'Ready' : j.stage === 'failed' ? 'Failed' : `${Math.round(j.progress)}%` }),
+          h('span', { text: [fmtShort(j.duration), lang, size ? fmtBytes(size) : null].filter(Boolean).join(' · ') })),
+        h('button', { class: 'x', title: 'Delete project', text: '✕', onclick: async (e) => { e.stopPropagation(); if (confirm(`Delete “${j.title || j.filename}” and all its files?`)) { await api('DELETE', '/api/jobs/' + j.id); loadProjects(); } } })));
     }
+    if (!list.length) box.append(h('div', { class: 'pcard empty muted', text: 'No project matches your search.' }));
+    const u = H.usage;
+    $('#storageNote').textContent = u ? `${all.length} project${all.length === 1 ? '' : 's'} · ${fmtBytes(u.bytes)} used · ${fmtBytes(u.free)} free on this disk` : '';
   }
-  function pickFile(f) {
-    if (!f) return;
-    H.file = f; $('#dropText').replaceChildren(h('span', { class: 'file', text: '🎵 ' + f.name }), h('div', { class: 'muted small', text: 'Click to choose a different file' }));
-    $('#btnCreate').disabled = false;
+  $('#projSearch').oninput = renderProjects;
+  $('#btnNew').onclick = () => { H.showNew = !H.showNew; renderProjects(); if (H.showNew) $('#newCard').scrollIntoView({ behavior: 'smooth' }); };
+
+  function pickFiles(fl) {
+    const files = [...(fl || [])].filter(Boolean);
+    if (files.length) { H.files = files; updateCreateUi(); }
+  }
+  function updateCreateUi() {
+    const n = H.files.length;
+    $('#dropText').replaceChildren(
+      n ? h('span', { class: 'file', text: n === 1 ? '🎵 ' + H.files[0].name : `🎵 ${n} songs selected` }) : 'Drop a song here, or click to choose',
+      n ? h('div', { class: 'muted small', text: n > 1 ? H.files.slice(0, 4).map((f) => f.name).join(' · ') + (n > 4 ? ` · +${n - 4} more` : '') : 'Click to choose a different file' }) : null);
+    $('#fieldLyrics').hidden = $('#fieldMeta').hidden = n > 1;
+    $('#multiNote').hidden = n <= 1;
+    $('#btnCreate').disabled = !n;
+    $('#btnCreate').textContent = n > 1 ? `Create ${n} karaoke projects →` : 'Create karaoke →';
   }
   const drop = $('#drop');
   drop.onclick = () => $('#file').click();
-  $('#file').onchange = (e) => pickFile(e.target.files[0]);
+  $('#file').onchange = (e) => pickFiles(e.target.files);
   drop.ondragover = (e) => { e.preventDefault(); drop.classList.add('over'); };
   drop.ondragleave = () => drop.classList.remove('over');
-  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); pickFile(e.dataTransfer.files[0]); };
+  drop.ondrop = (e) => { e.preventDefault(); drop.classList.remove('over'); pickFiles(e.dataTransfer.files); };
 
-  $('#btnCreate').onclick = () => {
-    if (!H.file) return;
-    const fd = new FormData();
-    fd.append('file', H.file); fd.append('language', H.lang); fd.append('lyrics', $('#lyrics').value);
-    fd.append('title', $('#title').value); fd.append('artist', $('#artist').value);
-    fd.append('asr', $('#asr').value); fd.append('separation', $('#sep').value);
-    lsSet('karaoke.asr', $('#asr').value); lsSet('karaoke.sep', $('#sep').value);
+  function uploadSong(file, fields, onProgress) {
+    return new Promise((resolve, reject) => {
+      const fd = new FormData(); fd.append('file', file);
+      for (const [k, v] of Object.entries(fields)) fd.append(k, v);
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/jobs');
+      xhr.upload.onprogress = (e) => { if (e.lengthComputable) onProgress(e.loaded / e.total); };
+      xhr.onload = () => {
+        let body = {}; try { body = JSON.parse(xhr.responseText); } catch (_) {}
+        if (xhr.status >= 200 && xhr.status < 300) resolve(body); else reject(new Error(body.detail || 'Upload failed'));
+      };
+      xhr.onerror = () => reject(new Error('Upload failed. Is the server still running?'));
+      xhr.send(fd);
+    });
+  }
+  $('#btnCreate').onclick = async () => {
+    const files = H.files.slice(), n = files.length;
+    if (!n) return;
+    const common = { language: H.lang, asr: $('#asr').value, separation: $('#sep').value };
+    lsSet('karaoke.asr', common.asr); lsSet('karaoke.sep', common.separation);
+    const fields = n > 1 ? { ...common, lyrics: '', title: '', artist: '' }
+      : { ...common, lyrics: $('#lyrics').value, title: $('#title').value, artist: $('#artist').value };
     const btn = $('#btnCreate'); btn.disabled = true;
-    const xhr = new XMLHttpRequest();
-    xhr.open('POST', '/api/jobs');
-    xhr.upload.onprogress = (e) => { if (e.lengthComputable) $('#uploadMsg').textContent = `Uploading… ${Math.round(e.loaded / e.total * 100)}%`; };
-    xhr.onload = () => {
-      btn.disabled = false; $('#uploadMsg').textContent = '';
-      let body = {}; try { body = JSON.parse(xhr.responseText); } catch (_) {}
-      if (xhr.status >= 200 && xhr.status < 300) { H.file = null; location.hash = '#/p/' + body.id; }
-      else toast(body.detail || 'Upload failed', 5000);
-    };
-    xhr.onerror = () => { btn.disabled = false; toast('Upload failed — is the server still running?', 5000); };
-    xhr.send(fd);
+    let ok = 0, last = null;
+    for (let i = 0; i < n; i++) {
+      const label = n > 1 ? `Uploading ${i + 1}/${n}… ` : 'Uploading… ';
+      try { last = await uploadSong(files[i], fields, (f) => { $('#uploadMsg').textContent = label + Math.round(f * 100) + '%'; }); ok++; }
+      catch (e) { toast(`${files[i].name}: ${e.message}`, 5000); }
+    }
+    $('#uploadMsg').textContent = '';
+    if (!ok) { btn.disabled = false; return; }
+    H.files = []; $('#file').value = '';
+    if (n === 1) { updateCreateUi(); location.hash = '#/p/' + last.id; return; }
+    H.showNew = false; updateCreateUi();
+    toast(`${ok} song${ok === 1 ? '' : 's'} queued. They are processed one after another.`, 4500);
+    loadProjects();
   };
   $('#btnDemo').onclick = async () => { const j = await api('POST', '/api/demo'); location.hash = '#/p/' + j.id; };
 
@@ -209,13 +266,14 @@
   function layoutCanvas() {
     if (!S.renderer) return;
     const { w, h: hh } = KS.outputSize(S.style.canvas);
+    const fs = isFullscreen();
     const stage = $('.stage');
-    const availW = stage.clientWidth || 800;
-    const availH = Math.max(260, window.innerHeight - 190);
+    const availW = fs ? window.innerWidth : (stage.clientWidth || 800);
+    const availH = fs ? window.innerHeight : Math.max(260, window.innerHeight - 190);
     const cssW = Math.min(availW, availH * (w / hh));
-    const wrap = $('#canvasWrap'); wrap.style.width = cssW + 'px'; wrap.style.aspectRatio = `${w} / ${hh}`;
+    const wrap = $('#canvasWrap'); wrap.style.width = cssW + 'px'; wrap.style.aspectRatio = `${w} / ${hh}`;   // CSS overrides both in fullscreen
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    const pw = Math.min(1400, Math.round(cssW * dpr));
+    const pw = Math.min(fs ? 2560 : 1400, Math.round(cssW * dpr));
     S.renderer.setSize(w, hh, pw, Math.round(pw * hh / w));
     S.needDraw = true;
   }
@@ -233,7 +291,20 @@
     }
   }
   const aInst = $('#aInst'), aVoc = $('#aVoc');
-  function updateGuide() { aVoc.volume = Math.min(1, S.exportOpts.guide); if (!aInst.paused) syncVoc(true); }
+  function updateGuide() {
+    aVoc.volume = Math.min(1, S.exportOpts.guide);
+    if (!aInst.paused) syncVoc(true);
+    $('#guideLbl').textContent = `🎤 ${Math.round(S.exportOpts.guide * 100)}%`;
+  }
+  /** Guide vocal level 0-50% in 5% steps; keeps the Export tab slider and the saved setting in step. */
+  function setGuide(v, announce) {
+    S.exportOpts.guide = Math.round(Math.max(0, Math.min(0.5, v)) * 20) / 20;
+    if (S.exportOpts.guide > 0) S.lastGuide = S.exportOpts.guide;
+    lsSet('karaoke.export', S.exportOpts);
+    S.controls.forEach((c) => c.sync && c.sync());
+    updateGuide();
+    if (announce && !isFullscreen()) toast(`Guide vocal ${Math.round(S.exportOpts.guide * 100)}%`, 1100);
+  }
   function syncVoc(force) {
     if (S.exportOpts.guide <= 0) { aVoc.pause(); return; }
     if (force || Math.abs(aVoc.currentTime - aInst.currentTime) > 0.12) aVoc.currentTime = aInst.currentTime;
@@ -246,11 +317,72 @@
   setInterval(() => { if (!aInst.paused) syncVoc(false); }, 400);
   $('#btnPlay').onclick = () => { aInst.paused ? aInst.play().catch(() => {}) : aInst.pause(); };
   $('#seek').oninput = (e) => { aInst.currentTime = (e.target.value / 1000) * (S.job.duration || aInst.duration || 0); S.needDraw = true; };
+  const dur = () => S.job.duration || aInst.duration || 0;
+  const seekBy = (d) => { aInst.currentTime = Math.max(0, Math.min(dur(), aInst.currentTime + d)); S.needDraw = true; };
+  function jumpLine(dir) {
+    const starts = S.lyrics.lines.map((l) => l.words[0].s + S.lyrics.offset), t = aInst.currentTime;
+    const target = dir > 0 ? starts.find((x) => x - 0.6 > t + 0.15) : [...starts].reverse().find((x) => x - 0.6 < t - 1.2);
+    if (target !== undefined) seekTo(target - 0.6); else if (dir < 0) seekTo(0);
+  }
+
+  // ---- fullscreen: only the picture, no UI
+  const fsEl = () => document.fullscreenElement || document.webkitFullscreenElement;
+  function isFullscreen() { return !!fsEl(); }
+  function toggleFullscreen() {
+    const wrap = $('#canvasWrap');
+    if (isFullscreen()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+    const req = wrap.requestFullscreen || wrap.webkitRequestFullscreen;
+    if (req) Promise.resolve(req.call(wrap)).catch(() => toast('Fullscreen is not available in this browser', 3000));
+  }
+  let idleTimer = 0;
+  function onFullscreenChange() {
+    const wrap = $('#canvasWrap');
+    wrap.classList.remove('idle');
+    layoutCanvas();
+    setTimeout(layoutCanvas, 150);                      // some browsers report the final size a moment later
+    if (isFullscreen()) idleTimer = setTimeout(() => wrap.classList.add('idle'), 1800);
+  }
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+  $('#canvasWrap').addEventListener('mousemove', () => {      // hide the mouse pointer after a moment, too
+    const wrap = $('#canvasWrap'); wrap.classList.remove('idle'); clearTimeout(idleTimer);
+    if (isFullscreen()) idleTimer = setTimeout(() => wrap.classList.add('idle'), 1800);
+  });
+  $('#btnFs').onclick = toggleFullscreen;
+  $('#btnKeys').onclick = () => { const p = $('#keysPanel'); p.hidden = !p.hidden; };
+  $('#cv').addEventListener('click', () => $('#btnPlay').click());          // click = play / pause
+  $('#cv').addEventListener('dblclick', toggleFullscreen);                    // double-click = fullscreen
+
+  // ---- hotkeys
   window.addEventListener('keydown', (e) => {
-    if (views.studio.hidden || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName)) return;
-    if (e.code === 'Space') { e.preventDefault(); $('#btnPlay').click(); }
-    if (e.code === 'ArrowLeft') { aInst.currentTime = Math.max(0, aInst.currentTime - 5); }
-    if (e.code === 'ArrowRight') { aInst.currentTime = aInst.currentTime + 5; }
+    if (views.studio.hidden || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target, tag = t.tagName, type = (t.type || '').toLowerCase();
+    const typing = tag === 'TEXTAREA' || tag === 'SELECT' || t.isContentEditable ||
+      (tag === 'INPUT' && !['range', 'checkbox', 'button'].includes(type));
+    if (typing) return;
+    const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+    const arrow = key.startsWith('Arrow');
+    if (arrow && tag === 'INPUT' && type === 'range' && t.id !== 'seek') return;     // let other sliders use their own arrows
+    if (tag === 'BUTTON' || tag === 'A' || (tag === 'INPUT' && type === 'checkbox')) t.blur();   // so Space does not also "click" it
+    let handled = true;
+    switch (key) {
+      case ' ': case 'k': $('#btnPlay').click(); break;
+      case 'ArrowLeft': seekBy(e.shiftKey ? -15 : -5); break;
+      case 'ArrowRight': seekBy(e.shiftKey ? 15 : 5); break;
+      case 'j': seekBy(-10); break;
+      case 'l': seekBy(10); break;
+      case 'ArrowUp': setGuide(S.exportOpts.guide + 0.05, true); break;
+      case 'ArrowDown': setGuide(S.exportOpts.guide - 0.05, true); break;
+      case 'g': setGuide(S.exportOpts.guide > 0 ? 0 : (S.lastGuide || 0.25), true); break;
+      case 'f': toggleFullscreen(); break;
+      case 'Home': case '0': seekTo(0); break;
+      case '[': jumpLine(-1); break;
+      case ']': jumpLine(1); break;
+      case '?': $('#btnKeys').click(); break;
+      case 'Escape': $('#keysPanel').hidden = true; handled = false; break;
+      default: handled = false;
+    }
+    if (handled) e.preventDefault();
   });
   const seekTo = (t) => { aInst.currentTime = Math.max(0, t); S.needDraw = true; };
 
@@ -576,7 +708,7 @@
     color(ft, 'Color', 'footer.color'); range(ft, 'Opacity', 'footer.opacity', 0.1, 1, 0.05, (v) => Math.round(v * 100) + '%');
 
     const tt = section(root, 'Title & artist');
-    toggle(tt, 'Show in the corner', 'title.show'); toggle(tt, 'Intro title card', 'title.intro');
+    toggle(tt, 'Cover card at the start', 'title.cover'); toggle(tt, 'Show in the corner', 'title.show'); toggle(tt, 'Intro title card', 'title.intro');
     select(tt, 'Position', 'title.position', POS6);
     range(tt, 'Size', 'title.size', 16, 80, 1, (v) => v + 'px'); color(tt, 'Color', 'title.color');
     range(tt, 'Intro length', 'title.introSeconds', 2, 10, 0.5, (v) => v + 's');
@@ -671,7 +803,8 @@
     const box = $('#renderList'); if (!box) return;
     const done = list.filter((r) => r.state === 'done' && (!S.render || r.id !== S.render.id));
     box.replaceChildren(...(done.length ? [h('div', { class: 'lbl muted', text: 'Earlier exports' })] : []), ...done.slice(0, 5).map((r) =>
-      h('div', { class: 'row check' }, h('span', { text: new Date(r.created * 1000).toLocaleString() + ` · ${(r.size / 1e6).toFixed(1)} MB` }), h('a', { href: `/api/jobs/${S.job.id}/renders/${r.id}/download`, text: 'Download', download: '' }))));
+      h('div', { class: 'row check' }, h('span', { text: new Date(r.created * 1000).toLocaleString() + ` · ${(r.size / 1e6).toFixed(1)} MB` }), h('span', { style: 'display:flex;gap:10px;align-items:center' }, h('a', { href: `/api/jobs/${S.job.id}/renders/${r.id}/download`, text: 'Download', download: '' }),
+        h('button', { class: 'btn small ghost danger', title: 'Delete this export to free disk space', text: '✕', onclick: async () => { if (confirm('Delete this exported video?')) { await api('DELETE', `/api/jobs/${S.job.id}/renders/${r.id}`); loadRenders(); } } })))));
   }
 
   // ------------------------------------------------------------------ boot

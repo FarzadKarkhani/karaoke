@@ -218,6 +218,17 @@ class RenderManager:
         if ev:
             ev.set()
 
+    def remove(self, job_id: str, rid: str) -> None:
+        """Cancel a queued/running export, or delete a finished one (frees its disk space)."""
+        try:
+            state = self.status(job_id, rid)["state"]
+        except FileNotFoundError:
+            return
+        if state in ("queued", "running"):
+            self.cancel(job_id, rid)
+        else:
+            shutil.rmtree(self.dir(job_id, rid), ignore_errors=True)
+
     def _run(self, job_id: str, rid: str) -> None:
         ev = self._cancel.setdefault(rid, threading.Event())
         d = self.dir(job_id, rid)

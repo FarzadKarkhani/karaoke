@@ -122,3 +122,39 @@ details.adv { margin-top: 16px; } details.adv summary { cursor: pointer; color: 
 .hint { color: var(--muted); font-size: 12.5px; margin: 6px 0 12px; line-height: 1.5; }
 .dl { display: flex; align-items: center; gap: 10px; margin-top: 14px; padding: 12px; border-radius: 12px; background: #11271d; border: 1px solid #1f5a3e; }
 .toast { position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%); background: #1b2032; border: 1px solid var(--line); padding: 10px 16px; border-radius: 10px; z-index: 50; box-shadow: 0 10px 40px #000a; }
+
+/* ---------- home: project gallery */
+.wrap.wide { max-width: 1120px; }
+#newCard { max-width: 880px; margin: 0 auto; }
+.projects { margin: 0 0 28px; }
+.ph { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; flex-wrap: wrap; }
+.ph h2 { margin: 0; font-size: 20px; flex: 1; min-width: 160px; }
+.ph input { width: 260px; max-width: 100%; }
+.pgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 12px; }
+.pcard { position: relative; background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 14px 12px; cursor: pointer; transition: .15s; display: flex; flex-direction: column; gap: 4px; min-height: 112px; }
+.pcard:hover { border-color: #4a5586; transform: translateY(-1px); background: #181d2e; }
+.pcard .pt { font-weight: 700; font-size: 16px; line-height: 1.35; padding-right: 26px; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.pcard .pa { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pcard .pm { margin-top: auto; display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); padding-top: 8px; }
+.pcard .x { position: absolute; top: 8px; right: 8px; background: none; border: 0; color: var(--muted); cursor: pointer; border-radius: 6px; width: 24px; height: 24px; opacity: 0; transition: .15s; }
+.pcard:hover .x { opacity: 1; } .pcard .x:hover { background: #2a1219; color: var(--danger); }
+.pcard .bar { height: 6px; margin-top: 8px; }
+.pcard.failed { border-color: #5a2a36; }
+.pcard.empty { cursor: default; opacity: .7; text-align: center; place-items: center; }
+#storageNote { margin-top: 12px; }
+
+/* ---------- transport extras */
+.guide { font-size: 12.5px; color: var(--muted); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.iconbtn { background: var(--panel2); border: 1px solid var(--line); color: var(--text); border-radius: 9px; width: 36px; height: 36px; cursor: pointer; font-size: 16px; }
+.iconbtn:hover { border-color: #3b4466; }
+.keys { margin-top: 10px; padding: 12px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; font-size: 13px; line-height: 1.9; color: var(--muted); }
+kbd { background: #0f1220; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 6px; padding: 1px 7px; font: 600 12px Inter, sans-serif; color: var(--text); }
+
+/* ---------- fullscreen preview: the picture only, nothing else */
+#canvasWrap:fullscreen { width: 100vw !important; height: 100vh !important; aspect-ratio: auto !important; border: 0; border-radius: 0; box-shadow: none; background: #000; margin: 0; }
+#canvasWrap:fullscreen canvas { width: 100%; height: 100%; object-fit: contain; }
+#canvasWrap:fullscreen.idle { cursor: none; }
+#canvasWrap:-webkit-full-screen { width: 100vw !important; height: 100vh !important; aspect-ratio: auto !important; border: 0; border-radius: 0; box-shadow: none; background: #000; margin: 0; }
+#canvasWrap:-webkit-full-screen canvas { width: 100%; height: 100%; object-fit: contain; }
+#canvasWrap:-webkit-full-screen.idle { cursor: none; }
+.canvas-wrap canvas { cursor: pointer; }

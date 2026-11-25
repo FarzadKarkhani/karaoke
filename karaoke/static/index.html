@@ -19,16 +19,26 @@
 </header>
 
 <!-- ============ HOME ============ -->
-<main id="viewHome" class="wrap" hidden>
-  <div class="hero">
+<main id="viewHome" class="wrap wide" hidden>
+  <div class="hero" id="hero">
     <h1>Turn any song into a<br>karaoke video.</h1>
     <p>Upload a track. We remove the vocals, find the words, and render an MP4 with word-by-word highlighting — Persian, English or Turkish.</p>
   </div>
-  <div class="card">
+  <section class="projects" id="projects" hidden>
+    <div class="ph">
+      <h2 id="projCount">Your projects</h2>
+      <input type="text" id="projSearch" placeholder="Search title or artist…" dir="auto">
+      <button class="btn primary" id="btnNew">＋ New karaoke</button>
+    </div>
+    <div class="pgrid" id="projList"></div>
+    <div class="muted small" id="storageNote"></div>
+  </section>
+
+  <div class="card" id="newCard">
     <div class="drop" id="drop">
       <div class="big" id="dropText">Drop a song here, or click to choose</div>
-      <div class="muted small" style="margin-top:6px">MP3 · WAV · FLAC · M4A · OGG</div>
-      <input type="file" id="file" accept="audio/*,video/mp4,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.wma,.aiff,.mka" hidden>
+      <div class="muted small" style="margin-top:6px">MP3 · WAV · FLAC · M4A · OGG · you can pick several songs at once</div>
+      <input type="file" id="file" multiple accept="audio/*,video/mp4,.mp3,.wav,.flac,.m4a,.aac,.ogg,.opus,.wma,.aiff,.mka" hidden>
     </div>
 
     <div class="field">
@@ -36,12 +46,14 @@
       <div class="chips" id="langChips"></div>
     </div>
 
-    <div class="field">
+    <div class="muted small" id="multiNote" hidden style="margin-top:14px">Several songs selected: lyrics, title and artist are per song, so the AI will listen for them now and you can fix or paste lyrics inside each project. <b>Choose the language above</b> if all songs share one, because auto-detect can guess wrong. Songs are processed one after another.</div>
+
+    <div class="field" id="fieldLyrics">
       <label for="lyrics">Lyrics <span class="muted" style="font-weight:400">— recommended</span></label>
       <textarea id="lyrics" dir="auto" placeholder="Paste the lyrics, one sung line per line.&#10;We keep your text exactly as written and only take the timing from the audio.&#10;Leave empty to use what the AI hears."></textarea>
     </div>
 
-    <div class="grid2 field">
+    <div class="grid2 field" id="fieldMeta">
       <div><label for="title">Title</label><input type="text" id="title" dir="auto" placeholder="Taken from the file if empty"></div>
       <div><label for="artist">Artist</label><input type="text" id="artist" dir="auto" placeholder="Optional"></div>
     </div>
@@ -62,7 +74,6 @@
       <span class="muted small" id="uploadMsg"></span>
     </div>
   </div>
-  <div class="projects" id="projects" hidden><h2>Your projects</h2><div id="projList"></div></div>
 </main>
 
 <!-- ============ PROCESSING ============ -->
@@ -89,6 +100,16 @@
       <button class="play" id="btnPlay" title="Play / pause (Space)">▶</button>
       <input type="range" id="seek" min="0" max="1000" value="0">
       <span class="time" id="timeLbl">0:00 / 0:00</span>
+      <span class="guide" id="guideLbl" title="Guide vocal level (↑ / ↓)">🎤 0%</span>
+      <button class="iconbtn" id="btnFs" title="Fullscreen preview (F)">⛶</button>
+      <button class="iconbtn" id="btnKeys" title="Keyboard shortcuts (?)">⌨</button>
+    </div>
+    <div class="keys" id="keysPanel" hidden>
+      <div><kbd>Space</kbd> / <kbd>K</kbd> play · pause</div>
+      <div><kbd>←</kbd> <kbd>→</kbd> seek 5 s (<kbd>Shift</kbd> 15 s) · <kbd>J</kbd> <kbd>L</kbd> 10 s</div>
+      <div><kbd>[</kbd> <kbd>]</kbd> previous · next lyric line · <kbd>Home</kbd> restart</div>
+      <div><kbd>↑</kbd> <kbd>↓</kbd> guide vocal louder · quieter · <kbd>G</kbd> guide on · off</div>
+      <div><kbd>F</kbd> or double-click the preview: fullscreen · <kbd>Esc</kbd> exit</div>
     </div>
     <audio id="aInst" preload="auto"></audio><audio id="aVoc" preload="auto"></audio>
   </section>

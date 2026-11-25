@@ -103,3 +103,37 @@ def test_render_requires_ready_project_and_valid_ids(client, demo):
 
 def test_reprocess_refused_for_demo(client, demo):
     assert client.post(f"/api/jobs/{demo['id']}/reprocess", json={"language": "fa"}).status_code == 409
+
+
+# ---------------------------------------------------------------- many projects / disk space
+def test_storage_report_lists_every_project(client, demo):
+    for _ in range(4):
+        client.post("/api/demo")
+    jobs = client.get("/api/jobs").json()
+    usage = client.get("/api/storage").json()
+    assert len(jobs) >= 5                                   # no cap on the number of projects
+    assert all(j["id"] in usage["projects"] and usage["projects"][j["id"]] > 0 for j in jobs)
+    assert usage["bytes"] == sum(usage["projects"].values()) and usage["free"] > 0
+
+
+def test_finished_export_can_be_deleted_to_free_space(client, demo):
+    import json
+    from karaoke import config
+    jid = demo["id"]
+    rdir = config.JOBS_DIR / jid / "renders" / "abcdef012345"
+    rdir.mkdir(parents=True)
+    (rdir / "video.mp4").write_bytes(b"x" * 1000)
+    (rdir / "status.json").write_text(json.dumps({"id": "abcdef012345", "state": "done", "created": 1, "size": 1000}))
+    assert len(client.get(f"/api/jobs/{jid}/renders").json()) == 1
+    assert client.delete(f"/api/jobs/{jid}/renders/abcdef012345").status_code == 200
+    assert client.get(f"/api/jobs/{jid}/renders").json() == []
+    assert not rdir.exists()
+    assert client.delete(f"/api/jobs/{jid}/renders/../../x").status_code in (404, 405)
+
+
+def test_processing_drops_the_intermediate_wav(tmp_path, monkeypatch):
+    """audio.wav (~10 MB/min) is only needed for separation; a finished project must not keep it."""
+    import inspect
+    from karaoke import jobs
+    src = inspect.getsource(jobs.JobStore._run)
+    assert 'wav.unlink(missing_ok=True)' in src and "need_separation" in src

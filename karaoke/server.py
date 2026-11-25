@@ -127,6 +127,10 @@ def create_app(port: int = 8000) -> FastAPI:
         from .demo import create_demo
         return public(create_demo(store))
 
+    @app.get("/api/storage")
+    def storage():
+        return store.disk_usage()
+
     @app.get("/api/jobs/{job_id}")
     def get_job(job_id: str):
         return public(job_or_404(job_id))
@@ -231,7 +235,10 @@ def create_app(port: int = 8000) -> FastAPI:
     @app.delete("/api/jobs/{job_id}/renders/{rid}")
     def cancel_render(job_id: str, rid: str):
         job_or_404(job_id)
-        renders.cancel(job_id, rid)
+        try:
+            renders.remove(job_id, rid)
+        except ValueError:
+            raise HTTPException(404, "Render not found")
         return {"ok": True}
 
     @app.get("/api/jobs/{job_id}/renders/{rid}/download")

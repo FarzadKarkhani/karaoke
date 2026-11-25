@@ -38,7 +38,36 @@ python -m karaoke          # opens http://127.0.0.1:8000
 3. In the **studio**, press play. Fix any lyric or timing, then style it in the **Style** and **Brand** tabs; the preview is exactly what gets rendered.
 4. **Export** → pick the format (16:9, 9:16, 1:1, 4:5) and press **Render MP4**.
 
-Not sure yet? Press **Try the demo** on the home page: no upload, no models, ready in a second.
+Several songs? Pick or drop them all at once. Not sure yet? Press **Try the demo** on the home page: no upload, no models, ready in a second.
+
+### Preview, shortcuts and fullscreen
+
+Before you press play the preview shows a **cover card**: the song title big in the middle with the artist below (it is also the first frame of the exported video; switch it off in **Brand → Title & artist**).
+
+| Key | Action |
+|---|---|
+| `Space` / `K` | Play · pause (clicking the preview does the same) |
+| `←` `→` | Seek 5 s back · forward (`Shift` = 15 s) · `J` `L` = 10 s |
+| `[` `]` | Previous · next lyric line · `Home` restart |
+| `↑` `↓` | Guide vocal louder · quieter (0–50 %, 5 % steps) · `G` guide on/off |
+| `F` or double-click | **Fullscreen**: just the video picture, no controls, the mouse pointer hides itself · `Esc` exits |
+| `?` | Show the shortcut list |
+
+Shortcuts are ignored while you type in a text box. They also work in fullscreen.
+
+### Projects and disk space
+
+There is **no limit on the number of projects**; only your disk. The home page lists every project as a card (title, artist, length, language, size, status) with a search box, and shows how much disk space they use. You can drop **several songs at once** (for example 30): they are queued and processed one after another, and the cards fill in as each finishes.
+
+What a project costs on disk (measured, for a 4-minute song):
+
+| What | Size |
+|---|---|
+| Project itself (original file, vocals and instrumental as WAV, preview MP3s) | about **100 MB** |
+| Each exported 1080p MP4 (Standard quality) | about **135 MB** (Draft / 720p: roughly 15–40 MB) |
+| AI models, downloaded once and shared by all projects | about 2–3 GB |
+
+So **30 projects ≈ 3 GB**, or about **7 GB** if each also keeps one 1080p export. Delete an old export with the ✕ next to it in **Export → Earlier exports**, or a whole project with the ✕ on its card, to free the space.
 
 ### Getting accurate word timing
 
